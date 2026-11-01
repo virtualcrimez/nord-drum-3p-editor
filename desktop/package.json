@@ -1,0 +1,32 @@
+{
+  "name": "nord-drum-3p-editor",
+  "productName": "Nord Drum 3P Editor",
+  "version": "1.0.0",
+  "description": "Standalone editor for the Nord Drum 3P",
+  "author": "Virtual Crimes",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "node prepare.js && electron .",
+    "dist": "node prepare.js && electron-builder --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.2.0",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "io.github.virtualcrimez.nord-drum-3p-editor",
+    "artifactName": "Nord-Drum-3P-Editor-${version}-${os}.${ext}",
+    "files": ["main.js", "preload.js", "app/**"],
+    "directories": { "buildResources": "build", "output": "dist" },
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["universal"] }],
+      "category": "public.app-category.music",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "notarize": false
+    },
+    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }] },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+  }
+}

@@ -1,0 +1,70 @@
+name: Build VST3 plugin
+
+on:
+  push:
+    paths:
+      - index.html
+      - plugin/**
+      - desktop/memory.js
+      - desktop/fonts.css
+      - desktop/fonts/**
+      - .github/workflows/plugin.yml
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      VST3: plugin/build/NordDrum3PEditor_artefacts/Release/VST3/Nord Drum 3P Editor.vst3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node plugin/prepare.js
+      - name: Get WebView2
+        if: runner.os == 'Windows'
+        run: nuget install Microsoft.Web.WebView2 -OutputDirectory "$RUNNER_TEMP/nuget"
+      - name: Configure
+        run: |
+          EXTRA=()
+          if [ "$RUNNER_OS" = Windows ]; then EXTRA+=(-DJUCE_WEBVIEW2_PACKAGE_LOCATION="$RUNNER_TEMP/nuget"); fi
+          cmake -S plugin -B plugin/build -DCMAKE_BUILD_TYPE=Release "${EXTRA[@]}"
+      - run: cmake --build plugin/build --config Release --parallel 4
+      - name: Sign for Mac
+        if: runner.os == 'macOS'
+        run: codesign --force --deep --sign - "$VST3"
+      - name: Test in a host
+        timeout-minutes: 3
+        env:
+          ND3P_TEST_SCRIPT: ${{ github.workspace }}/plugin/test/selftest.js
+          ND3P_TEST_RESULT: ${{ github.workspace }}/plugin/test-result.txt
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then HOST="plugin/build/PluginTest_artefacts/Release/Plugin Test.exe"
+          else HOST="plugin/build/PluginTest_artefacts/Release/Plugin Test.app/Contents/MacOS/Plugin Test"; fi
+          "$HOST" "$PWD/$VST3"
+      - name: Validate
+        timeout-minutes: 10
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then ZIP=pluginval_Windows.zip; TOOL=pluginval/pluginval.exe
+          else ZIP=pluginval_macOS.zip; TOOL=pluginval/pluginval.app/Contents/MacOS/pluginval; fi
+          curl -sSL -o "$RUNNER_TEMP/$ZIP" "https://github.com/Tracktion/pluginval/releases/download/v1.0.4/$ZIP"
+          (cd "$RUNNER_TEMP" && mkdir pluginval && cd pluginval && unzip -q "../$ZIP")
+          "$RUNNER_TEMP/$TOOL" --strictness-level 5 --validate-in-process --output-dir "$RUNNER_TEMP" --validate "$PWD/$VST3"
+      - name: Package
+        run: |
+          mkdir dist && cp -R "$VST3" dist/ && cp plugin/LICENSE plugin/README.txt dist/
+          if [ "$RUNNER_OS" = Windows ]; then NAME=Nord-Drum-3P-Editor-VST3-1.0.0-win.zip; (cd dist && 7z a -tzip "../$NAME" . >/dev/null)
+          else NAME=Nord-Drum-3P-Editor-VST3-1.0.0-mac.zip; (cd dist && ditto -c -k --keepParent . "../$NAME"); fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vst3-${{ matrix.os }}
+          path: Nord-Drum-3P-Editor-VST3-*.zip
+          if-no-files-found: error

@@ -1,0 +1,1211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Nord Drum 3P Editor</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Saira+Semi+Condensed:wght@400;500;600;700&display=swap">
+<style>
+/* Layout concept: the unit's red faceplate, with recessed dark wells for each sound Part and a 4-digit LED readout. One deliberate look, no light theme. */
+:root {
+  color-scheme: dark;
+  --chassis: #a51c20;
+  --chassis-deep: #7f1417;
+  --well: #231b1b;
+  --well-raised: #342928;
+  --line: #4d3f3d;
+  --ink: #f8eee3;
+  --ink-soft: #c9b8ab;
+  --led: #ff4433;
+  --led-off: #4a1d1a;
+  --go: #63f08f;
+  --warn: #ffb54d;
+  --label: "Saira Semi Condensed", "Arial Narrow", "Roboto Condensed", Arial, sans-serif;
+  --mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0; background: var(--chassis); color: var(--ink);
+  font: 500 15px/1.35 var(--label);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 14px 28px;
+}
+.page { max-width: 1440px; margin: 0 auto; display: grid; gap: 12px; }
+h1, h2, h3, p { margin: 0; }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* top strip */
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.brand { min-width: 0; }
+.brand h1 { font-size: 26px; font-weight: 700; letter-spacing: .02em; line-height: 1.1; text-transform: uppercase; }
+.brand p { font-size: 13px; color: #f3d9cc; }
+.midi { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 12px; margin-left: auto; }
+.field { display: grid; gap: 2px; min-width: 0; }
+.field > span { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #f3d9cc; font-weight: 600; }
+.well .field > span { color: var(--ink-soft); }
+select, input[type=number], input[type=text] {
+  background: var(--well); border: 1px solid var(--line); border-radius: 3px;
+  padding: 5px 6px; min-height: 32px; max-width: 100%;
+}
+select { max-width: 190px; }
+input[type=number] { width: 62px; font-variant-numeric: tabular-nums; }
+.btn {
+  background: var(--well-raised); border: 1px solid var(--line); border-radius: 3px;
+  padding: 5px 11px; min-height: 32px; cursor: pointer; font-weight: 600; letter-spacing: .02em;
+}
+.btn:hover { background: #4b3b39; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.primary { background: var(--ink); color: #3f0d0f; border-color: var(--ink); }
+.btn.primary:hover { background: #fff; }
+.btn.on { background: var(--led); color: #260503; border-color: var(--led); }
+.status { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; background: var(--well); border-radius: 3px; padding: 6px 10px; min-height: 32px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--led-off); flex: none; }
+.dot.ok { background: var(--go); box-shadow: 0 0 7px var(--go); }
+.dot.bad { background: var(--warn); }
+
+/* faceplate grid */
+.deck { display: grid; grid-template-columns: 318px minmax(0, 1fr); gap: 12px; align-items: start; }
+.side { display: grid; gap: 12px; min-width: 0; }
+.parts { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; min-width: 0; }
+.well { background: var(--well); border-radius: 6px; padding: 11px 12px 12px; min-width: 0; box-shadow: inset 0 2px 5px rgba(0,0,0,.45); }
+.well > h2 { font-size: 14px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--ink); margin-bottom: 8px; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.well > h2 small { font-size: 12px; font-weight: 500; letter-spacing: .02em; text-transform: none; color: var(--ink-soft); }
+.p-tone { grid-column: span 7; } .p-noise { grid-column: span 5; }
+.p-click { grid-column: span 3; } .p-mix { grid-column: span 4; } .p-fx { grid-column: span 5; }
+.p-kit { grid-column: span 12; }
+.knobs { display: flex; flex-wrap: wrap; gap: 8px 6px; }
+
+/* readout */
+.readout { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; }
+.seg { display: flex; gap: 1px; background: #120b0b; padding: 7px 8px; border-radius: 3px; transform: skewX(-4deg); }
+.seg svg { width: 27px; height: 36px; display: block; }
+.seg rect, .seg circle { fill: #2c1312; }
+.seg .lit { fill: var(--led); filter: drop-shadow(0 0 2px rgba(255,68,51,.8)); }
+.rtext { min-width: 0; }
+.rtext b { display: block; font-size: 15px; font-weight: 700; }
+.rtext span { display: block; font-size: 13px; color: var(--ink-soft); font-family: var(--mono); overflow-wrap: anywhere; }
+.rtext .est { color: var(--warn); }
+
+/* pads */
+.pads { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.pad {
+  position: relative; aspect-ratio: 1 / .92; background: #171212; border: 2px solid #171212; border-radius: 9px;
+  padding: 7px; text-align: left; cursor: pointer; display: flex; flex-direction: column; min-width: 0; overflow: hidden;
+  box-shadow: inset 0 0 0 1px #3a2f2e, 0 2px 0 var(--chassis-deep);
+}
+.pad:hover { background: #211918; }
+.pad.sel { border-color: var(--led); }
+.pad.hit { background: #4b1712; }
+.pad .num { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.pad .nm { font-weight: 700; font-size: 15px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: auto; }
+.pad .sub { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+.mono {
+  position: absolute; top: 3px; right: 3px; background: none; border: 0; padding: 5px; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--ink-soft);
+}
+.mono i { width: 8px; height: 8px; border-radius: 50%; background: #1f3a29; display: block; }
+.mono[aria-pressed=true] i { background: var(--go); box-shadow: 0 0 6px var(--go); }
+.tools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+.tools .btn { padding-inline: 4px; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: end; }
+.row.top8 { margin-top: 8px; }
+.grow { flex: 1 1 110px; min-width: 0; }
+.grow select, .grow input { width: 100%; max-width: none; }
+
+/* knob */
+.knob { width: 62px; display: grid; justify-items: center; gap: 0; border-radius: 4px; touch-action: none; cursor: ns-resize; user-select: none; }
+.knob svg { width: 50px; height: 50px; display: block; }
+.knob .track { fill: none; stroke: #4a3b39; stroke-width: 3.5; }
+.knob .val { fill: none; stroke: var(--led); stroke-width: 3.5; }
+.knob .cap { fill: #3e3231; stroke: #5d4c49; }
+.knob .tick { stroke: var(--ink); stroke-width: 2.5; stroke-linecap: round; }
+.knob .name { font-size: 12.5px; font-weight: 600; line-height: 1.1; text-align: center; }
+.knob .v { font-family: var(--mono); font-size: 12.5px; color: var(--led); font-variant-numeric: tabular-nums; }
+.knob.off { opacity: .4; }
+.knob.pitch { width: 92px; }
+
+/* chips */
+.chips { display: flex; flex-wrap: wrap; gap: 3px; }
+.chip { background: var(--well-raised); border: 1px solid var(--line); border-radius: 3px; min-width: 32px; min-height: 28px; padding: 1px 5px; cursor: pointer; font-family: var(--mono); font-size: 13px; }
+.chip:hover { background: #4b3b39; }
+.chip.on { background: var(--led); border-color: var(--led); color: #260503; font-weight: 500; }
+.chip.guess { border-style: dashed; border-color: var(--warn); }
+.chiprow { display: grid; gap: 3px; margin-bottom: 9px; }
+.chiprow > span { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; }
+.wavegrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 12px; margin-bottom: 9px; }
+.wavegrid > div > span { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 2px; }
+.hint { font-size: 13px; color: var(--ink-soft); min-height: 1.3em; margin-bottom: 7px; }
+.hint b { color: var(--ink); font-weight: 600; }
+.warnline { color: var(--warn); }
+
+/* console */
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+.tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 3px 8px; cursor: pointer; font-weight: 600; color: var(--ink-soft); }
+.tabs button[aria-selected=true] { color: var(--ink); border-color: var(--led); }
+#log { height: 200px; overflow: auto; background: #120b0b; border-radius: 3px; padding: 7px 9px; font: 400 12.5px/1.45 var(--mono); white-space: pre-wrap; color: var(--ink-soft); margin: 0; }
+.tablewrap { overflow: auto; max-height: 340px; }
+#preview { background: var(--well); border-radius: 4px; padding: 7px 11px; font-size: 14px; color: var(--warn); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th { text-align: left; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); padding: 4px 8px; white-space: nowrap; }
+td { padding: 4px 8px; border-top: 1px solid var(--line); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pill { display: inline-block; font-size: 12px; padding: 0 6px; border-radius: 3px; background: var(--well-raised); }
+.pill.good { background: #1d4a2f; color: #bff5d0; } .pill.part { background: #5a3f12; color: #ffdca6; }
+#learnBox { background: var(--well-raised); border-radius: 4px; padding: 9px 11px; margin-bottom: 10px; }
+#learnBox b { color: var(--led); font-family: var(--mono); font-size: 18px; }
+.setup { max-width: 72ch; display: grid; gap: 8px; padding-left: 20px; margin: 0; }
+.setup code { font-family: var(--mono); color: var(--led); }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.cols h3 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; }
+#library { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; max-height: 150px; overflow: auto; }
+#library li { display: flex; gap: 4px; align-items: center; }
+#library .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#library .btn { min-height: 26px; padding: 0 7px; font-size: 13px; }
+.foot { font-size: 13px; color: #f3d9cc; max-width: 90ch; }
+.foot a { color: inherit; }
+#toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: #3f0d0f; font-weight: 600; padding: 7px 14px; border-radius: 4px; max-width: min(90vw, 560px); z-index: 5; }
+
+@media (max-width: 1180px) {
+  .deck { grid-template-columns: 1fr; }
+  .side { grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
+}
+@media (max-width: 860px) {
+  .parts > * { grid-column: span 12; }
+  .midi { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="top">
+    <div class="brand">
+      <h1>Nord Drum 3P Editor</h1>
+      <p>Six channels, every sound parameter over MIDI. Unofficial tool, not made by Clavia.</p>
+    </div>
+    <div class="midi">
+      <button class="btn primary" id="connect" type="button">Connect MIDI</button>
+      <label class="field"><span>MIDI out</span><select id="outSel"><option value="">None</option></select></label>
+      <label class="field"><span>MIDI in</span><select id="inSel"><option value="">None</option></select></label>
+      <label class="field"><span>Global ch</span><input id="globalCh" type="number" min="1" max="16" value="10"></label>
+      <label class="field"><span>Routing</span>
+        <select id="routing">
+          <option value="global">Global channel + focus</option>
+          <option value="individual">Individual channels</option>
+        </select>
+      </label>
+      <span class="status"><i class="dot" id="midiDot"></i><span id="midiText">Not connected</span></span>
+    </div>
+  </header>
+
+  <p id="preview" hidden>Preview only. This hosted copy can't reach MIDI or save files. Open the saved .html file in Chrome or Edge to use it with your unit.</p>
+
+  <div class="deck">
+    <div class="side">
+      <section class="well" aria-label="Value readout">
+        <div class="readout">
+          <div class="seg" id="seg" aria-hidden="true"></div>
+          <div class="rtext" aria-live="polite"><b id="rName">Ready</b><span id="rDetail">Turn a knob to see its CC</span></div>
+        </div>
+      </section>
+
+      <section class="well">
+        <h2>Channels <small id="chHint">Click to select and play</small></h2>
+        <div class="pads" id="pads"></div>
+        <div class="tools">
+          <button class="btn" id="copy" type="button">Copy</button>
+          <button class="btn" id="paste" type="button">Paste</button>
+          <button class="btn" id="swap" type="button" title="Swap this channel with the copied one">Swap</button>
+          <button class="btn" id="init" type="button">Init</button>
+          <button class="btn" id="mutate" type="button" title="Nudge this channel's sound parameters at random">Mutate</button>
+          <button class="btn" id="undo" type="button" title="Ctrl+Z">Undo</button>
+          <button class="btn" id="editAll" type="button" aria-pressed="false" title="Knob changes apply to all six channels">Edit all</button>
+          <button class="btn on" id="audition" type="button" aria-pressed="true" title="Play the sound when you click a pad">Audition</button>
+          <button class="btn" id="panic" type="button" title="Sends All Sound Off">Panic</button>
+        </div>
+        <div class="row top8">
+          <label class="field grow"><span>Starter sound</span><select id="starter"></select></label>
+          <button class="btn" id="loadStarter" type="button">Load</button>
+        </div>
+        <div class="row top8">
+          <label class="field grow"><span>Tune pads to</span>
+            <select id="scale">
+              <option value="0,2,4,7,9,12">Major pentatonic</option>
+              <option value="0,3,5,7,10,12">Minor pentatonic</option>
+              <option value="0,3,5,6,7,10">Blues</option>
+              <option value="0,2,4,6,8,10">Whole tone</option>
+              <option value="0,3,4,7,8,11">Augmented</option>
+              <option value="0,12,24,36,48,60">Octaves</option>
+            </select></label>
+          <button class="btn" id="tune" type="button" title="Spreads the pitches up from channel 1">Apply</button>
+        </div>
+      </section>
+
+      <section class="well">
+        <h2>Kit</h2>
+        <div class="row">
+          <button class="btn primary" id="sendKit" type="button" title="Replaces the sound on the unit. Use Store Kit on the unit to keep it.">Send kit to unit</button>
+          <label class="field grow"><span>Name</span><input id="kitName" type="text" maxlength="40"></label>
+        </div>
+        <div class="row top8">
+          <label class="field"><span>Bank</span><select id="bank"><option>A</option><option>B</option><option>C</option><option>D</option></select></label>
+          <label class="field"><span>Kit</span><input id="prog" type="number" min="1" max="50" value="1"></label>
+          <button class="btn" id="recall" type="button" title="Sends Bank Select and Program Change. The editor can't read that kit's settings back.">Recall on unit</button>
+        </div>
+        <div class="row top8">
+          <button class="btn" id="saveKit" type="button">Save to library</button>
+          <button class="btn" id="exportKit" type="button">Export</button>
+          <button class="btn" id="importKit" type="button">Import</button>
+          <input id="kitFile" type="file" accept=".json,.nd3kit" hidden>
+        </div>
+        <ul id="library" class="top8" style="margin-top:8px"></ul>
+      </section>
+    </div>
+
+    <div class="parts">
+      <section class="well p-tone">
+        <h2>Tone <small id="waveDesc"></small></h2>
+        <div class="wavegrid" id="waves"></div>
+        <div class="hint" id="toneHint"></div>
+        <div class="knobs" id="k-tone"></div>
+      </section>
+      <section class="well p-noise">
+        <h2>Noise</h2>
+        <div class="chiprow"><span>Filter type</span><div class="chips" id="c-nType"></div></div>
+        <div class="knobs" id="k-noise"></div>
+      </section>
+      <section class="well p-click">
+        <h2>Click</h2>
+        <div class="chiprow"><span>Type</span><div class="chips" id="c-cType"></div></div>
+        <div class="knobs" id="k-click"></div>
+      </section>
+      <section class="well p-mix">
+        <h2>Mix</h2>
+        <div class="knobs" id="k-mix"></div>
+      </section>
+      <section class="well p-fx">
+        <h2>EQ and effects</h2>
+        <div class="chiprow"><span>Dist type</span><div class="chips" id="c-distType"></div></div>
+        <div class="knobs" id="k-fx"></div>
+      </section>
+      <section class="well p-kit">
+        <h2>Drum kit effects <small>Shared by all six channels, always sent on the Global channel</small></h2>
+        <div class="chiprow"><span>Reverb type</span><div class="chips" id="c-rvType"></div></div>
+        <div class="knobs" id="k-kit"></div>
+      </section>
+    </div>
+  </div>
+
+  <section class="well">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-map" aria-selected="true" aria-controls="pane-map" type="button">Value map</button>
+      <button role="tab" id="tab-sysex" aria-selected="false" aria-controls="pane-sysex" type="button">Sys Ex backup</button>
+      <button role="tab" id="tab-log" aria-selected="false" aria-controls="pane-log" type="button">MIDI monitor</button>
+      <button role="tab" id="tab-setup" aria-selected="false" aria-controls="pane-setup" type="button">Unit setup</button>
+    </div>
+
+    <div id="pane-map" role="tabpanel">
+      <p class="hint">Nord publishes the CC numbers but not how panel values map to 0–127. Everything starts as an even spread, which is wrong for Tone Wave. Learn reads the real values from your unit. To use it, set the unit one step above the lowest value, press Learn, turn down one click, then turn up one click at a time to the end.</p>
+      <div id="learnBox" hidden>
+        <p>Learning <span id="learnName"></span>. Now set the unit to <b id="learnNext"></b> <span id="learnPos"></span></p>
+        <div class="row top8"><button class="btn" id="learnBack" type="button">Back one step</button><button class="btn" id="learnStop" type="button">Stop and keep</button></div>
+      </div>
+      <div class="row" style="margin-bottom:8px">
+        <button class="btn" id="exportCal" type="button">Export map</button>
+        <button class="btn" id="importCal" type="button">Import map</button>
+        <input id="calFile" type="file" accept=".json" hidden>
+      </div>
+      <div class="tablewrap"><table><thead><tr><th>Parameter</th><th>CC</th><th>Steps</th><th>Source</th><th></th></tr></thead><tbody id="mapBody"></tbody></table></div>
+    </div>
+
+    <div id="pane-sysex" role="tabpanel" hidden>
+      <div class="cols">
+        <div>
+          <h3>Back up a kit</h3>
+          <p class="hint">On the unit, hold Shift and press MIDI until the display reads <b>Send</b>, then press Drum Kit Select. The editor captures the dump here. It can't be opened as knobs, because Nord doesn't publish the format, but it restores exactly.</p>
+          <p id="syxState" class="hint">Nothing captured yet.</p>
+          <div class="row">
+            <button class="btn" id="syxSave" type="button" disabled>Save .syx</button>
+            <button class="btn" id="syxLoad" type="button">Load .syx</button>
+            <button class="btn" id="syxSend" type="button" disabled>Send to unit</button>
+            <button class="btn" id="syxClear" type="button" disabled>Clear</button>
+            <input id="syxFile" type="file" accept=".syx" hidden>
+          </div>
+        </div>
+        <div>
+          <h3>Saving vs. storing</h3>
+          <p class="hint">A dump or Send Kit replaces the kit currently loaded on the unit, and that survives only until you change kits. Use Store Kit on the unit to keep it. Memory Protect ships On, so set it to <b>Pr.Of</b> first.</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="pane-log" role="tabpanel" hidden>
+      <pre id="log" tabindex="0" aria-label="MIDI message log"></pre>
+    </div>
+
+    <div id="pane-setup" role="tabpanel" hidden>
+      <ol class="setup">
+        <li>Open this page in Chrome or Edge and allow MIDI when asked. Firefox needs a site permission add-on, and Safari has no Web MIDI.</li>
+        <li>Connect MIDI In and MIDI Out on the unit to your interface. Both directions matter: Out is what keeps the editor in step with the panel and feeds Learn.</li>
+        <li>On the unit, press Shift + MIDI repeatedly to reach each setting. Set <code>CC.Sr</code> and <code>PC.Sr</code> so it sends and receives.</li>
+        <li>Set Global Channel to match the box above. The factory value is <code>L.10</code>. This one setting is all Global routing needs.</li>
+        <li>For Individual routing, give each channel its own <code>Ch.n</code> and enter the same numbers here:
+          <div class="row top8" id="indCh"></div></li>
+        <li>If notes double or flam, your interface or DAW is echoing MIDI back. Turn echo off, or set the unit to <code>Lo.Of</code> only if the echo stays on.</li>
+      </ol>
+    </div>
+  </section>
+
+  <p class="foot">CC numbers come from the Nord Drum 3P User Manual, Edition C. Bank Select, Tone Pitch steps, Channel Select ranges and the first five Wave values come from owner reports. Starter sounds are simple recipes for this editor, not factory patches.</p>
+</div>
+<div id="toast" role="status" hidden></div>
+
+<script>
+'use strict';
+/* ---------- Parameter tables (manual pp. 7-11, CC list p. 15) ---------- */
+const num = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => String(a + i));
+const STEP_0_50 = num(0, 50);
+const FILTERS = ['L1', 'L2', 'B1', 'B2', 'H1', 'H2', 'H3'];
+const FILTER_NAMES = ['Low pass 12 dB', 'Low pass 24 dB', 'Band pass 6 dB', 'Band pass 12 dB', 'High pass 12 dB', 'High pass 24 dB', 'High pass with high cut'];
+const CLICKS = ['n1', 'n2', 'n3', 'P1', 'P2', 'P3', 'H1', 'H2', 'H3', 'C1', 'C2', 'C3'];
+const DISTS = ['dr', 'SA', 'rn'];
+const DIST_NAMES = ['Overdrive', 'Sample rate reduction', 'Ring modulation'];
+const REVERBS = ['ti', 'r1', 'r2', 'p1', 'p2', 'p3', 'p4', 'st', 'ha'];
+const REVERB_NAMES = ['Tiled room', 'Room 1', 'Room 2', 'Plate 1', 'Plate 2', 'Plate 3', 'Plate 4', 'Stage', 'Hall'];
+const PANS = ['L9', 'L8', 'L7', 'L6', 'L5', 'L4', 'L3', 'L2', 'L1', 'C', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9'];
+
+const WAVE_FAMILIES = [
+  { name: 'Analog', ids: ['A1', 'A2', 'A3', 'A4', 'A5', 'A6'] },
+  { name: 'T-bridge', ids: ['t1', 't2'] },
+  { name: 'FM', ids: ['F1', 'F2', 'F3', 'F4'] },
+  { name: 'Harmonic resonance', ids: ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'] },
+  { name: 'Drum head', ids: ['d1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7'] },
+  { name: 'Tuned percussion', ids: ['P1', 'P2', 'P3', 'P4'] },
+  { name: 'Cymbal', ids: ['C1', 'C2', 'C3'] },
+  { name: 'Ring mod', ids: ['r1', 'r2'] },
+];
+const WAVES = WAVE_FAMILIES.flatMap(f => f.ids);
+const WAVE_INFO = {
+  A1: ['Analog sine', 'Spectra has no effect'], A2: ['Analog triangle', 'detunes a 2nd triangle'], A3: ['Analog sawtooth', 'detunes a 2nd sawtooth'],
+  A4: ['Analog square', 'detunes a 2nd square'], A5: ['Highpass filtered square', 'detunes a 2nd square'], A6: ['Analog pulse', 'sets the initial pulse width'],
+  t: ['T-bridge oscillator', 'detunes the 2nd oscillator'], F: ['FM algorithm', 'detunes the operator'], H: ['Harmonic resonance model', 'moves the resonance center'],
+  d: ['Drum head resonance model', 'moves the resonance center'], P: ['Tuned percussion model', 'moves the resonance center'], C: ['Cymbal', 'tunes and filters the cymbal'], r: ['Ring mod oscillator', 'detunes the modulator'],
+};
+
+const PARAMS = [
+  // Noise
+  { id: 'nFreq', part: 'Noise', name: 'Freq', cc: 14, labels: STEP_0_50, box: 'k-noise', def: 30 },
+  { id: 'nType', part: 'Noise', name: 'Filter type', cc: 15, labels: FILTERS, chips: 'c-nType', names: FILTER_NAMES, def: 0 },
+  { id: 'nRes', part: 'Noise', name: 'Resonance', cc: 17, labels: num(0, 20), box: 'k-noise', def: 0 },
+  { id: 'nDyn', part: 'Noise', name: 'Dyn filter', cc: 16, labels: num(-9, 9), box: 'k-noise', def: 9, center: 9 },
+  { id: 'nDecay', part: 'Noise', name: 'Decay', cc: 21, labels: STEP_0_50, box: 'k-noise', def: 15 },
+  { id: 'nMode', part: 'Noise', name: 'Decay mode', cc: 20, labels: ['E1', 'E2', 'E3', 'L', 'G', ...STEP_0_50], box: 'k-noise', def: 0 },
+  // Tone
+  { id: 'tWave', part: 'Tone', name: 'Wave', cc: 46, labels: WAVES, def: 0, strict: true },
+  { id: 'tSpectra', part: 'Tone', name: 'Spectra', cc: 30, labels: num(0, 99), box: 'k-tone', def: 0 },
+  { id: 'tFreq', part: 'Tone', name: 'Freq', cc: 52, labels: STEP_0_50, box: 'k-tone', def: 25 },
+  { id: 'tDyn', part: 'Tone', name: 'Dyn filter', cc: 53, labels: num(0, 9), box: 'k-tone', def: 0 },
+  { id: 'tDecay', part: 'Tone', name: 'Decay', cc: 50, labels: STEP_0_50, box: 'k-tone', def: 20 },
+  { id: 'tMode', part: 'Tone', name: 'Decay mode', cc: 49, labels: ['E1', 'E2', 'E3', 'L', 'P', ...STEP_0_50], box: 'k-tone', def: 0 },
+  { id: 'tBend', part: 'Tone', name: 'Bend', cc: 54, labels: num(-9, 50), box: 'k-tone', def: 9, center: 9 },
+  { id: 'tTime', part: 'Tone', name: 'Bend time', cc: 55, labels: STEP_0_50, box: 'k-tone', def: 15 },
+  { id: 'tPitch', part: 'Tone', name: 'Pitch', cc: 31, pitch: true, labels: Array.from({ length: 256 }, (_, i) => (i / 2).toFixed(1)), box: 'k-tone', def: 120 },
+  // Click
+  { id: 'cLevel', part: 'Click', name: 'Level', cc: 56, labels: STEP_0_50, box: 'k-click', def: 0 },
+  { id: 'cType', part: 'Click', name: 'Type', cc: 57, labels: CLICKS, chips: 'c-cType', def: 0 },
+  // Mix
+  { id: 'nLvl', part: 'Mix', name: 'Noise lvl', cc: 18, labels: STEP_0_50, box: 'k-mix', def: 0 },
+  { id: 'tLvl', part: 'Mix', name: 'Tone lvl', cc: 19, labels: STEP_0_50, box: 'k-mix', def: 40 },
+  { id: 'level', part: 'Mix', name: 'Ch level', cc: 7, labels: STEP_0_50, box: 'k-mix', def: 40 },
+  { id: 'pan', part: 'Mix', name: 'Pan', cc: 10, labels: PANS, box: 'k-mix', def: 9, center: 9 },
+  // EQ and effects
+  { id: 'eqFreq', part: 'EQ', name: 'EQ freq', cc: 25, labels: STEP_0_50, box: 'k-fx', def: 25 },
+  { id: 'eqGain', part: 'EQ', name: 'EQ gain', cc: 26, labels: num(-9, 9), box: 'k-fx', def: 9, center: 9 },
+  { id: 'dist', part: 'Effects', name: 'Dist', cc: 23, labels: STEP_0_50, box: 'k-fx', def: 0 },
+  { id: 'distType', part: 'Effects', name: 'Dist type', cc: 24, labels: DISTS, chips: 'c-distType', names: DIST_NAMES, def: 0 },
+  { id: 'rvb', part: 'Effects', name: 'Rvb amt', cc: 48, labels: STEP_0_50, box: 'k-fx', def: 0 },
+  { id: 'dly', part: 'Effects', name: 'Dly amt', cc: 47, labels: STEP_0_50, box: 'k-fx', def: 0 },
+  // Kit-wide
+  { id: 'rvType', part: 'Reverb', name: 'Reverb type', cc: 12, labels: REVERBS, chips: 'c-rvType', names: REVERB_NAMES, def: 1, kit: true },
+  { id: 'rvColor', part: 'Reverb', name: 'Color', cc: 13, labels: num(-9, 9), box: 'k-kit', def: 9, center: 9, kit: true },
+  { id: 'dlRate', part: 'Delay', name: 'Rate', cc: 44, labels: num(0, 99), box: 'k-kit', def: 60, kit: true },
+  { id: 'dlFb', part: 'Delay', name: 'Feedback', cc: 45, labels: num(0, 20), box: 'k-kit', def: 5, kit: true },
+];
+const BY_ID = Object.fromEntries(PARAMS.map(p => [p.id, p]));
+const BY_CC = Object.fromEntries(PARAMS.map(p => [p.cc, p]));
+const CH_PARAMS = PARAMS.filter(p => !p.kit);
+const KIT_PARAMS = PARAMS.filter(p => p.kit);
+
+const CC = { bankMsb: 0, bankLsb: 32, pitchMsb: 31, pitchLsb: 63, mono: 59, select: 70 };
+const NOTES = [60, 62, 64, 65, 67, 69];                // factory defaults, manual p. 12
+const SELECT_SEND = [10, 32, 53, 74, 95, 117];         // middle of each owner-reported range
+const SELECT_START = [22, 43, 64, 85, 107];            // manual's "channel 4 = 71" falls inside these
+
+/* ---------- Value scaling ---------- */
+const KNOWN_WAVES = { 0: 74, 1: 83, 2: 77, 3: 80, 4: 115 }; // owner report, firmware 1.04
+let valueMap = { tWave: { ...KNOWN_WAVES } };
+const learned = {};                                     // id -> true once read from this unit
+
+function toCC(p, i) {
+  const t = valueMap[p.id];
+  if (t && t[i] != null) return t[i];
+  const n = p.labels.length;
+  return n > 1 ? Math.round(i * 127 / (n - 1)) : 0;
+}
+function fromCC(p, v) {
+  const t = valueMap[p.id];
+  if (t) {
+    const hit = Object.keys(t).find(k => t[k] === v);
+    if (hit != null) return +hit;
+    if (p.strict || Object.keys(t).length === p.labels.length) {
+      if (p.strict && Object.keys(t).length < p.labels.length) return null;
+      let best = 0, gap = 999;
+      for (const k in t) { const d = Math.abs(t[k] - v); if (d < gap) { gap = d; best = +k; } }
+      return best;
+    }
+  }
+  return Math.round(v * (p.labels.length - 1) / 127);
+}
+const selectToCh = v => SELECT_START.filter(s => v >= s).length;
+const isEstimated = (p, i) => !(valueMap[p.id] && valueMap[p.id][i] != null) && !p.pitch;
+
+/* ---------- Kit state ---------- */
+function blankChannel(name) {
+  const c = { name: name || 'Init', mono: false, v: {} };
+  for (const p of CH_PARAMS) c.v[p.id] = p.def;
+  return c;
+}
+function indexOfValue(p, x) {
+  if (p.pitch) return Math.round(x * 2);
+  const i = p.labels.indexOf(String(x));
+  return i < 0 ? p.def : i;
+}
+function recipe(name, vals) {
+  const c = blankChannel(name);
+  for (const k in vals) c.v[k] = indexOfValue(BY_ID[k], vals[k]);
+  return c;
+}
+const STARTERS = [
+  recipe('Round kick', { tWave: 'A1', tPitch: 33, tDecay: 22, tBend: 28, tTime: 8, cLevel: 22, cType: 'P2', tLvl: 46, level: 44 }),
+  recipe('Clicky kick', { tWave: 'd1', tPitch: 36, tSpectra: 20, tDecay: 16, tBend: 18, tTime: 5, cLevel: 34, cType: 'H1', tLvl: 44, level: 44 }),
+  recipe('Tight snare', { tWave: 'd4', tPitch: 55, tSpectra: 35, tDecay: 13, nLvl: 38, tLvl: 30, nType: 'H1', nFreq: 26, nDecay: 18, cLevel: 18, cType: 'n2', level: 42 }),
+  recipe('Fat snare', { tWave: 't2', tPitch: 50, tSpectra: 14, tDecay: 17, tBend: 8, tTime: 5, nLvl: 42, tLvl: 34, nType: 'B2', nFreq: 34, nRes: 3, nDecay: 22, level: 42 }),
+  recipe('Closed hat', { tLvl: 0, nLvl: 44, nType: 'H2', nFreq: 42, nDecay: 6, cLevel: 8, cType: 'H2', level: 36, pan: 'r2' }),
+  recipe('Open hat', { tLvl: 0, nLvl: 42, nType: 'H2', nFreq: 40, nDecay: 24, nMode: 'E2', level: 34, pan: 'r2' }),
+  recipe('Floor tom', { tWave: 'd2', tPitch: 43, tSpectra: 30, tDecay: 24, tBend: 10, tTime: 8, cLevel: 12, cType: 'P1', tLvl: 44, level: 42, pan: 'L2' }),
+  recipe('Rack tom', { tWave: 'd2', tPitch: 52, tSpectra: 30, tDecay: 21, tBend: 10, tTime: 7, cLevel: 12, cType: 'P1', tLvl: 44, level: 42, pan: 'r2' }),
+  recipe('Cowbell', { tWave: 'r1', tPitch: 76, tSpectra: 40, tDecay: 14, tLvl: 40, level: 36, eqFreq: 30, eqGain: 3 }),
+  recipe('Marimba', { tWave: 'P1', tPitch: 60, tSpectra: 50, tDecay: 22, tLvl: 42, level: 40, rvb: 8 }),
+  recipe('Ride', { tWave: 'C2', tPitch: 70, tSpectra: 50, tDecay: 34, tLvl: 38, level: 34, cLevel: 10, cType: 'H3' }),
+  recipe('Laser zap', { tWave: 'F2', tPitch: 72, tFreq: 22, tSpectra: 30, tDecay: 14, tBend: 42, tTime: 12, tLvl: 40, level: 36, dly: 12 }),
+];
+const clone = o => JSON.parse(JSON.stringify(o));
+const starter = n => clone(STARTERS.find(s => s.name === n));
+function exampleKit() {
+  const k = {
+    name: 'Example kit',
+    ch: ['Round kick', 'Tight snare', 'Closed hat', 'Rack tom', 'Floor tom', 'Cowbell'].map(starter),
+    kit: {},
+  };
+  for (const p of KIT_PARAMS) k.kit[p.id] = p.def;
+  return k;
+}
+let kit = exampleKit();
+let focus = 0;
+let editAll = false;
+let audition = true;
+let clip = null;
+const undoStack = [];
+function pushUndo() { undoStack.push(JSON.stringify(kit)); if (undoStack.length > 60) undoStack.shift(); }
+const getVal = (p, ch) => p.kit ? kit.kit[p.id] : kit.ch[ch].v[p.id];
+function putVal(p, ch, i) { if (p.kit) kit.kit[p.id] = i; else kit.ch[ch].v[p.id] = i; }
+
+/* ---------- Small helpers ---------- */
+const $ = id => document.getElementById(id);
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem('nd3p.' + k)); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem('nd3p.' + k, JSON.stringify(v)); } catch { /* storage may be blocked */ } },
+};
+let toastT;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 3600); }
+function download(name, data, type) {
+  const url = URL.createObjectURL(new Blob([data], { type }));
+  const a = document.createElement('a'); a.href = url; a.download = name;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+function noteName(p) {
+  const n = Math.round(p);
+  return ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][((n % 12) + 12) % 12] + (Math.floor(n / 12) - 1);
+}
+const hz = p => 440 * 2 ** ((p - 69) / 12);
+
+/* ---------- Seven-segment readout ---------- */
+const SEG = { a: [8, 2, 24, 5], b: [33, 8, 5, 22], c: [33, 35, 5, 22], d: [8, 58, 24, 5], e: [2, 35, 5, 22], f: [2, 8, 5, 22], g: [8, 30, 24, 5] };
+const GLYPH = {
+  0: 'abcdef', 1: 'bc', 2: 'abdeg', 3: 'abcdg', 4: 'bcfg', 5: 'acdfg', 6: 'acdefg', 7: 'abc', 8: 'abcdefg', 9: 'abcdfg',
+  A: 'abcefg', a: 'abcdeg', b: 'cdefg', C: 'adef', c: 'deg', d: 'bcdeg', E: 'adefg', F: 'aefg', G: 'acdef', H: 'bcefg', h: 'cefg',
+  L: 'def', n: 'ceg', o: 'cdeg', P: 'abefg', p: 'abefg', r: 'eg', S: 'acdfg', s: 'acdfg', t: 'defg', i: 'c', '-': 'g', _: 'd',
+};
+const segDigits = [];
+function buildSeg() {
+  for (let d = 0; d < 4; d++) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 50 66');
+    const parts = {};
+    for (const s in SEG) {
+      const r = document.createElementNS(svg.namespaceURI, 'rect');
+      const [x, y, w, h] = SEG[s];
+      r.setAttribute('x', x); r.setAttribute('y', y); r.setAttribute('width', w); r.setAttribute('height', h); r.setAttribute('rx', 1.5);
+      svg.append(r); parts[s] = r;
+    }
+    const dot = document.createElementNS(svg.namespaceURI, 'circle');
+    dot.setAttribute('cx', 45); dot.setAttribute('cy', 60); dot.setAttribute('r', 3);
+    svg.append(dot); parts.dot = dot;
+    $('seg').append(svg); segDigits.push(parts);
+  }
+}
+function showSeg(text) {
+  const cells = [];
+  for (const c of String(text)) {
+    if (c === '.' && cells.length) cells[cells.length - 1].dot = true;
+    else cells.push({ c, dot: false });
+  }
+  const shown = cells.slice(-4);
+  while (shown.length < 4) shown.unshift({ c: ' ', dot: false });
+  shown.forEach((cell, d) => {
+    const on = GLYPH[cell.c] || '';
+    for (const s in SEG) segDigits[d][s].classList.toggle('lit', on.includes(s));
+    segDigits[d].dot.classList.toggle('lit', cell.dot);
+  });
+}
+function readout(p, ch, i) {
+  showSeg(p.labels[i]);
+  $('rName').textContent = p.part + ' ' + p.name + (p.kit ? '' : ' · Ch ' + (ch + 1));
+  const d = $('rDetail');
+  if (p.pitch) { d.textContent = 'CC 31/63 → ' + (i >> 1) + '/' + (i & 1 ? 64 : 0) + ' · ' + noteName(i / 2) + ' ' + hz(i / 2).toFixed(1) + ' Hz'; d.classList.remove('est'); return; }
+  const est = isEstimated(p, i);
+  d.textContent = 'CC ' + p.cc + ' → ' + toCC(p, i) + (est ? ' (estimated)' : '');
+  d.classList.toggle('est', est);
+}
+
+/* ---------- MIDI ---------- */
+let access = null, out = null, inp = null;
+let globalCh = 9;                     // zero-based
+let routing = 'global';
+let indCh = [0, 1, 2, 3, 4, 5];
+let unitFocus = -1;
+let sendAt = 0;
+const logLines = [];
+let logDirty = false;
+
+function log(dir, bytes) {
+  const b = Array.from(bytes);
+  const t = new Date().toTimeString().slice(0, 8);
+  logLines.push(t + ' ' + dir + ' ' + describe(b));
+  if (logLines.length > 300) logLines.shift();
+  logDirty = true;
+}
+function describe(b) {
+  const hex = b.slice(0, 12).map(x => x.toString(16).padStart(2, '0')).join(' ') + (b.length > 12 ? ' …' : '');
+  if (b[0] === 0xF0) return 'Sys Ex, ' + b.length + ' bytes: ' + hex;
+  const st = b[0] & 0xF0, ch = (b[0] & 15) + 1, name = 'ch' + String(ch).padStart(2, ' ') + ' ';
+  if (st === 0xB0) { const p = BY_CC[b[1]]; return name + 'CC ' + String(b[1]).padStart(3, ' ') + ' = ' + String(b[2]).padStart(3, ' ') + (p ? '  ' + p.part + ' ' + p.name : b[1] === 70 ? '  Channel Select' : b[1] === 59 ? '  Mono Group' : b[1] === 63 ? '  Tone Pitch LSB' : ''); }
+  if (st === 0x90) return name + 'Note ' + b[1] + ' vel ' + b[2];
+  if (st === 0x80) return name + 'Note off ' + b[1];
+  if (st === 0xC0) return name + 'Program ' + b[1];
+  return hex;
+}
+function raw(bytes, spacing) {
+  log('→', bytes);
+  if (!out) return;
+  const now = performance.now();
+  sendAt = Math.max(now, sendAt) + (spacing || 1.5);
+  try { out.send(bytes, sendAt); } catch (e) { toast('MIDI send failed: ' + e.message); }
+}
+const ccMsg = (ch, n, v, sp) => raw([0xB0 | ch, n, v], sp);
+
+function targetChannel(p, ch, sp) {
+  if (p.kit) return globalCh;
+  if (routing === 'individual') return indCh[ch];
+  if (unitFocus !== ch) { ccMsg(globalCh, CC.select, SELECT_SEND[ch], sp); unitFocus = ch; }
+  return globalCh;
+}
+function sendParam(p, ch, i, sp) {
+  const mc = targetChannel(p, ch, sp);
+  if (p.pitch) {                                       // LSB first: Drum 2 manual p. 32
+    ccMsg(mc, CC.pitchLsb, i & 1 ? 64 : 0, sp);
+    ccMsg(mc, CC.pitchMsb, i >> 1, sp);
+  } else ccMsg(mc, p.cc, toCC(p, i), sp);
+}
+function sendMono(ch, sp) {
+  const mc = targetChannel({}, ch, sp);
+  ccMsg(mc, CC.mono, kit.ch[ch].mono ? 127 : 0, sp);
+}
+const pending = new Map();
+let flushQueued = false;
+function queueSend(p, ch, i) {
+  pending.set(ch + ':' + p.id, () => sendParam(p, ch, i));
+  if (flushQueued) return;
+  flushQueued = true;
+  setTimeout(() => { flushQueued = false; for (const f of pending.values()) f(); pending.clear(); }, 16);
+}
+function sendChannel(ch, sp) {
+  for (const p of CH_PARAMS) sendParam(p, ch, kit.ch[ch].v[p.id], sp);
+  sendMono(ch, sp);
+}
+function sendKit() {
+  unitFocus = -1;
+  for (let c = 0; c < 6; c++) sendChannel(c, 4);
+  for (const p of KIT_PARAMS) sendParam(p, 0, kit.kit[p.id], 4);
+  if (routing === 'global') { ccMsg(globalCh, CC.select, SELECT_SEND[focus], 4); unitFocus = focus; }
+  toast(out ? 'Sent "' + kit.name + '". Use Store Kit on the unit to keep it.' : 'No MIDI out selected, so nothing was sent.');
+}
+function trigger(ch, vel) {
+  const note = NOTES[ch];
+  raw([0x90 | globalCh, note, vel]);
+  flashPad(ch);
+  setTimeout(() => raw([0x80 | globalCh, note, 0]), 120);
+}
+
+function refreshPorts() {
+  if (!access) return;
+  const fill = (sel, ports, want) => {
+    const cur = sel.value || want || '';
+    sel.replaceChildren(new Option('None', ''), ...ports.map(p => new Option(p.name, p.id)));
+    const match = ports.find(p => p.id === cur) || ports.find(p => p.name === store.get(sel.id)) || ports.find(p => /nord|drum/i.test(p.name)) || (ports.length === 1 ? ports[0] : null);
+    sel.value = match ? match.id : '';
+  };
+  fill($('outSel'), [...access.outputs.values()]);
+  fill($('inSel'), [...access.inputs.values()]);
+  bindPorts();
+}
+function bindPorts() {
+  if (inp) inp.onmidimessage = null;
+  out = access.outputs.get($('outSel').value) || null;
+  inp = access.inputs.get($('inSel').value) || null;
+  if (inp) inp.onmidimessage = onMidi;
+  store.set('outSel', out && out.name); store.set('inSel', inp && inp.name);
+  setMidiStatus();
+}
+function setMidiStatus(msg) {
+  const dot = $('midiDot'), txt = $('midiText');
+  dot.classList.toggle('ok', !!(out && inp));
+  dot.classList.toggle('bad', !!access && !(out && inp) || !!msg);
+  txt.textContent = msg || (!access ? 'Not connected' : out && inp ? 'Linked both ways' : out ? 'Out only, panel moves won\'t show' : inp ? 'In only, edits won\'t reach the unit' : 'Choose your MIDI ports');
+}
+async function connect() {
+  if (!navigator.requestMIDIAccess) { setMidiStatus('This browser has no Web MIDI. Use Chrome or Edge.'); return; }
+  try { access = await navigator.requestMIDIAccess({ sysex: true }); }
+  catch {
+    try { access = await navigator.requestMIDIAccess(); toast('Connected without Sys Ex, so kit dumps are off.'); }
+    catch { setMidiStatus('MIDI is blocked here. Open the saved .html file in Chrome or Edge.'); return; }
+  }
+  access.onstatechange = refreshPorts;
+  $('connect').textContent = 'Rescan';
+  refreshPorts();
+}
+
+function onMidi(e) {
+  const b = e.data, st = b[0] & 0xF0, ch = b[0] & 15;
+  if (b[0] >= 0xF8) return;                            // clock and active sensing
+  log('←', b);
+  if (b[0] === 0xF0) { addSysex(b); return; }
+  let target = ch === globalCh ? focus : indCh.indexOf(ch);
+  if (target < 0) return;
+  if (st === 0x90 && b[2] > 0) {
+    if (ch === globalCh) { const n = NOTES.indexOf(b[1]); if (n >= 0) flashPad(n); }
+    else flashPad(target);
+    return;
+  }
+  if (st === 0xC0) { $('prog').value = Math.min(b[1] + 1, 50); return; }
+  if (st !== 0xB0) return;
+  const num_ = b[1], v = b[2];
+  if (learning && learning.cc === num_) { learnStep(v); }
+  if (num_ === CC.select && ch === globalCh) { unitFocus = selectToCh(v); selectChannel(unitFocus); return; }
+  if (num_ === CC.bankLsb) { $('bank').selectedIndex = clamp(v, 0, 3); return; }
+  if (num_ === CC.mono) { kit.ch[target].mono = v >= 64; renderPads(); return; }
+  if (num_ === CC.pitchLsb || num_ === CC.pitchMsb) {
+    const p = BY_ID.tPitch, cur = kit.ch[target].v.tPitch;
+    const i = num_ === CC.pitchMsb ? (v << 1) | (cur & 1) : (cur & ~1) | (v >= 64 ? 1 : 0);
+    applyIncoming(p, target, clamp(i, 0, 255));
+    return;
+  }
+  const p = BY_CC[num_];
+  if (!p) return;
+  const i = fromCC(p, v);
+  if (i == null) {
+    $('rName').textContent = 'Unmapped ' + p.name + ' value';
+    $('rDetail').textContent = 'CC ' + p.cc + ' = ' + v;
+    if (!learning) { waveWaiting = { v, ch: target }; toneHints(); }
+    return;
+  }
+  applyIncoming(p, target, clamp(i, 0, p.labels.length - 1));
+}
+function applyIncoming(p, ch, i) {
+  if (p.strict) waveWaiting = null;
+  putVal(p, ch, i);
+  readout(p, ch, i);
+  if (p.kit || ch === focus) refreshParam(p);
+  renderPads();
+}
+
+/* ---------- Teaching one wave at a time ---------- */
+let waveWaiting = null;                                // { v, ch }: a Wave value the unit sent that isn't mapped yet
+function teachWave(i) {
+  const { v, ch } = waveWaiting, p = BY_ID.tWave, t = valueMap.tWave;
+  for (const k in t) if (t[k] === v) delete t[k];
+  t[i] = v;
+  learned.tWave = true;
+  waveWaiting = null;
+  saveMap(); renderMap();
+  kit.ch[ch].v.tWave = i;                              // the unit is already on this wave, so nothing is sent
+  readout(p, ch, i);
+  refreshAll(); renderPads();
+  toast('Saved: ' + p.labels[i] + ' is CC 46 value ' + v + '.');
+}
+
+/* ---------- Sys Ex capture ---------- */
+let sysex = [];
+function addSysex(bytes) { sysex.push(Array.from(bytes)); updateSysex(); toast('Captured a ' + bytes.length + ' byte dump.'); }
+function sysexBytes() { return Uint8Array.from(sysex.flat()); }
+function updateSysex() {
+  const total = sysex.reduce((n, m) => n + m.length, 0);
+  $('syxState').textContent = total ? sysex.length + ' message' + (sysex.length > 1 ? 's' : '') + ', ' + total + ' bytes ready.' : 'Nothing captured yet.';
+  $('syxSave').disabled = $('syxSend').disabled = $('syxClear').disabled = !total;
+}
+function loadSyx(buf) {
+  const a = Array.from(new Uint8Array(buf)), msgs = [];
+  let cur = null;
+  for (const x of a) {
+    if (x === 0xF0) cur = [x];
+    else if (cur) { cur.push(x); if (x === 0xF7) { msgs.push(cur); cur = null; } }
+  }
+  if (!msgs.length) { toast('No Sys Ex messages in that file.'); return; }
+  sysex = msgs; updateSysex();
+}
+
+/* ---------- Editing ---------- */
+function setParam(p, i, gesture) {
+  i = clamp(Math.round(i), 0, p.labels.length - 1);
+  if (gesture) pushUndo();
+  const chans = p.kit ? [0] : editAll ? [0, 1, 2, 3, 4, 5] : [focus];
+  for (const c of chans) { putVal(p, c, i); queueSend(p, c, i); }
+  readout(p, focus, i);
+  refreshParam(p);
+  if (p.id === 'tWave' || p.id === 'tPitch') renderPads();
+}
+function selectChannel(c) {
+  focus = c;
+  if (routing === 'global' && unitFocus !== c) { ccMsg(globalCh, CC.select, SELECT_SEND[c]); unitFocus = c; }
+  renderPads(); refreshAll();
+}
+function replaceChannel(c, data, label) {
+  pushUndo();
+  kit.ch[c] = data;
+  sendChannel(c, 2);
+  renderPads(); refreshAll();
+  toast(label);
+}
+
+/* ---------- Knobs ---------- */
+const knobs = {};
+function makeKnob(p) {
+  const k = el('div', 'knob' + (p.pitch ? ' pitch' : ''));
+  k.tabIndex = 0;
+  k.setAttribute('role', 'slider');
+  k.setAttribute('aria-label', p.part + ' ' + p.name);
+  k.setAttribute('aria-valuemin', 0); k.setAttribute('aria-valuemax', p.labels.length - 1);
+  k.title = (p.part + ' ' + p.name) + '. CC ' + p.cc + (p.pitch ? '/63' : '') + '. Drag, or use arrow keys. Double-click resets.';
+  k.innerHTML = '<svg viewBox="0 0 56 56" aria-hidden="true"><circle class="track" cx="28" cy="28" r="24" pathLength="100" stroke-dasharray="75 100" transform="rotate(135 28 28)"/><circle class="val" cx="28" cy="28" r="24" pathLength="100" transform="rotate(135 28 28)"/><circle class="cap" cx="28" cy="28" r="17"/><line class="tick" x1="28" y1="19" x2="28" y2="12"/></svg><span class="name"></span><span class="v"></span>';
+  k.querySelector('.name').textContent = p.name;
+  const n = p.labels.length;
+  let startY, startV, moved;
+  k.addEventListener('pointerdown', e => {
+    if (e.button) return;
+    k.setPointerCapture(e.pointerId); k.focus();
+    startY = e.clientY; startV = getVal(p, focus); moved = false;
+  });
+  k.addEventListener('pointermove', e => {
+    if (startY == null) return;
+    const px = e.shiftKey ? 900 : 220;
+    const next = Math.round(startV + (startY - e.clientY) / px * (n - 1) * (n < 30 ? 1.4 : 1));
+    if (next !== getVal(p, focus) && clamp(next, 0, n - 1) !== getVal(p, focus)) { setParam(p, next, !moved); moved = true; }
+  });
+  const end = () => { startY = null; };
+  k.addEventListener('pointerup', end); k.addEventListener('pointercancel', end);
+  k.addEventListener('dblclick', () => setParam(p, p.def, true));
+  k.addEventListener('wheel', e => {
+    if (document.activeElement !== k) return;
+    e.preventDefault(); setParam(p, getVal(p, focus) + (e.deltaY < 0 ? 1 : -1), true);
+  }, { passive: false });
+  k.addEventListener('keydown', e => {
+    const big = Math.max(1, Math.round(n / 10)), cur = getVal(p, focus);
+    const to = { ArrowUp: cur + 1, ArrowRight: cur + 1, ArrowDown: cur - 1, ArrowLeft: cur - 1, PageUp: cur + big, PageDown: cur - big, Home: 0, End: n - 1 }[e.key];
+    if (to == null) return;
+    e.preventDefault(); setParam(p, to, true);
+  });
+  knobs[p.id] = k;
+  $(p.box).append(k);
+}
+function paintKnob(p) {
+  const k = knobs[p.id], i = getVal(p, focus), n = p.labels.length - 1, f = i / n;
+  const c = p.center != null ? p.center / n : 0;
+  const a = Math.min(f, c), b = Math.max(f, c);
+  const val = k.querySelector('.val');
+  val.setAttribute('stroke-dasharray', Math.max((b - a) * 75, .01) + ' 100');
+  val.setAttribute('stroke-dashoffset', -a * 75);
+  k.querySelector('.tick').setAttribute('transform', 'rotate(' + (-135 + 270 * f) + ' 28 28)');
+  const text = p.pitch ? p.labels[i] + ' ' + noteName(i / 2) : p.labels[i];
+  k.querySelector('.v').textContent = text;
+  k.setAttribute('aria-valuenow', i); k.setAttribute('aria-valuetext', text);
+}
+
+/* ---------- Chips ---------- */
+const chipSets = {};
+function makeChips(p, box, ids) {
+  const list = chipSets[p.id] = chipSets[p.id] || [];
+  for (const id of ids) {
+    const i = p.labels.indexOf(id);
+    const b = el('button', 'chip', id);
+    b.type = 'button';
+    if (p.names) b.title = p.names[i];
+    b.addEventListener('click', () => { if (p.strict && waveWaiting) teachWave(i); else setParam(p, i, true); });
+    box.append(b); list[i] = b;
+  }
+}
+function paintChips(p) {
+  const cur = getVal(p, focus);
+  chipSets[p.id].forEach((b, i) => {
+    b.classList.toggle('on', i === cur);
+    b.setAttribute('aria-pressed', i === cur);
+    if (p.strict) { b.classList.toggle('guess', isEstimated(p, i)); }
+  });
+}
+function refreshParam(p) {
+  if (knobs[p.id]) paintKnob(p);
+  if (chipSets[p.id]) paintChips(p);
+  if (p.id === 'tWave' || p.id === 'tFreq' || p.id === 'eqGain') toneHints();
+}
+function refreshAll() { PARAMS.forEach(refreshParam); toneHints(); }
+function toneHints() {
+  const v = kit.ch[focus].v, w = WAVES[v.tWave];
+  const info = WAVE_INFO[w] || WAVE_INFO[w[0]];
+  $('waveDesc').textContent = info[0];
+  const sine = w === 'A1', fm = w[0] === 'F', tb = w[0] === 't';
+  knobs.tFreq.classList.toggle('off', sine);
+  knobs.tDyn.classList.toggle('off', sine);
+  knobs.tSpectra.classList.toggle('off', sine);
+  knobs.eqFreq.classList.toggle('off', v.eqGain === BY_ID.eqGain.center);
+  knobs.tFreq.querySelector('.name').textContent = fm ? 'FM amount' : tb ? 'Osc mix' : 'Freq';
+  const parts = [sine ? 'Sine has no Spectra, Freq or Dyn filter.' : 'Spectra ' + info[1] + '.'];
+  if (isEstimated(BY_ID.tWave, v.tWave)) parts.push('This Wave\'s CC value is an estimate, so the unit may land elsewhere. Run Learn below.');
+  if (waveWaiting) { parts.length = 0; parts.push('The unit is on a wave the editor doesn\'t know yet (CC 46 value ' + waveWaiting.v + '). Click the wave shown on the unit\'s display to save it.'); }
+  $('toneHint').textContent = parts.join(' ');
+  $('toneHint').classList.toggle('warnline', !!waveWaiting || isEstimated(BY_ID.tWave, v.tWave));
+}
+
+/* ---------- Pads ---------- */
+const padEls = [];
+function buildPads() {
+  for (let c = 0; c < 6; c++) {
+    const pad = el('div', 'pad');
+    pad.tabIndex = 0; pad.setAttribute('role', 'button');
+    pad.innerHTML = '<span class="num"></span><span class="nm"></span><span class="sub"></span>';
+    const mono = el('button', 'mono');
+    mono.type = 'button'; mono.title = 'Mono Group: channels in the group cut each other off';
+    mono.append(document.createTextNode('M'), el('i'));
+    mono.addEventListener('click', e => {
+      e.stopPropagation(); pushUndo();
+      kit.ch[c].mono = !kit.ch[c].mono; sendMono(c); renderPads();
+    });
+    pad.append(mono);
+    const hit = e => {
+      selectChannel(c);
+      if (!audition) return;
+      const r = pad.getBoundingClientRect();
+      const y = e && e.clientY ? (r.bottom - e.clientY) / r.height : .7;
+      trigger(c, clamp(Math.round(30 + y * 97), 1, 127));
+    };
+    pad.addEventListener('click', hit);
+    pad.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); hit(); } });
+    $('pads').append(pad); padEls.push({ pad, mono });
+  }
+}
+function renderPads() {
+  kit.ch.forEach((c, i) => {
+    const { pad, mono } = padEls[i];
+    pad.classList.toggle('sel', i === focus);
+    pad.setAttribute('aria-label', 'Channel ' + (i + 1) + ', ' + c.name);
+    pad.querySelector('.num').textContent = i + 1;
+    pad.querySelector('.nm').textContent = c.name;
+    pad.querySelector('.sub').textContent = WAVES[c.v.tWave] + ' / ' + (c.v.tPitch / 2).toFixed(1);
+    mono.setAttribute('aria-pressed', !!c.mono);
+  });
+}
+function flashPad(c) {
+  const p = padEls[c].pad;
+  p.classList.add('hit');
+  setTimeout(() => p.classList.remove('hit'), 110);
+}
+
+/* ---------- Kit library ---------- */
+let library = store.get('library') || [];
+function renderLibrary() {
+  const ul = $('library');
+  ul.replaceChildren(...library.map((k, i) => {
+    const li = el('li');
+    const open = el('button', 'btn', 'Open'); open.type = 'button';
+    open.addEventListener('click', () => { pushUndo(); kit = normaliseKit(clone(k)); afterKitLoad(); toast('Opened "' + k.name + '". Send kit to hear it.'); });
+    const del = el('button', 'btn', 'Delete'); del.type = 'button';
+    del.addEventListener('click', () => { library.splice(i, 1); store.set('library', library); renderLibrary(); });
+    li.append(el('span', 'nm', k.name), open, del);
+    return li;
+  }));
+}
+function normaliseKit(k) {
+  const out_ = exampleKit();
+  out_.name = String(k.name || 'Imported kit').slice(0, 40);
+  out_.ch = Array.from({ length: 6 }, (_, c) => {
+    const src = (k.ch && k.ch[c]) || {}, ch = blankChannel(String(src.name || 'Ch ' + (c + 1)).slice(0, 24));
+    ch.mono = !!src.mono;
+    for (const p of CH_PARAMS) { const v = src.v && src.v[p.id]; if (Number.isInteger(v)) ch.v[p.id] = clamp(v, 0, p.labels.length - 1); }
+    return ch;
+  });
+  for (const p of KIT_PARAMS) { const v = k.kit && k.kit[p.id]; if (Number.isInteger(v)) out_.kit[p.id] = clamp(v, 0, p.labels.length - 1); }
+  return out_;
+}
+function afterKitLoad() { $('kitName').value = kit.name; renderPads(); refreshAll(); }
+
+/* ---------- Learning the value map ---------- */
+let learning = null;
+function startLearn(p) {
+  learning = { p, cc: p.cc, idx: 0, table: {}, last: null };
+  $('learnBox').hidden = false;
+  $('learnName').textContent = p.part + ' ' + p.name;
+  learnPrompt();
+  toast('Put the unit one step above the lowest value, then turn down one click to begin.');
+}
+function learnPrompt() {
+  const l = learning, labels = l.p.labels;
+  $('learnNext').textContent = labels[l.idx];
+  $('learnPos').textContent = '(' + (l.idx + 1) + ' of ' + labels.length + '). Turn the dial one click at a time.';
+}
+function learnStep(v) {
+  const l = learning;
+  if (v === l.last) return;
+  if (Object.values(l.table).includes(v)) return;
+  l.table[l.idx] = v; l.last = v; l.idx++;
+  if (l.idx >= l.p.labels.length) stopLearn(); else learnPrompt();
+}
+function stopLearn() {
+  const l = learning;
+  learning = null;
+  $('learnBox').hidden = true;
+  if (Object.keys(l.table).length) {
+    valueMap[l.p.id] = l.p.id === 'tWave' ? { ...KNOWN_WAVES, ...l.table } : l.table;
+    learned[l.p.id] = true;
+    saveMap(); toast('Saved ' + Object.keys(l.table).length + ' values for ' + l.p.name + '.');
+  }
+  renderMap(); refreshAll();
+}
+function saveMap() { store.set('map', { valueMap, learned }); }
+function loadMap(m) {
+  if (!m || !m.valueMap) return false;
+  for (const id in m.valueMap) {
+    if (!BY_ID[id]) continue;
+    const t = {};
+    for (const k in m.valueMap[id]) { const v = m.valueMap[id][k]; if (Number.isInteger(v) && v >= 0 && v <= 127) t[+k] = v; }
+    valueMap[id] = t;
+    if (m.learned && m.learned[id]) learned[id] = true;
+  }
+  return true;
+}
+function renderMap() {
+  const rows = PARAMS.filter(p => !p.pitch).map(p => {
+    const n = p.labels.length, have = Object.keys(valueMap[p.id] || {}).length;
+    const tr = el('tr');
+    tr.append(el('td', '', p.part + ' ' + p.name), el('td', '', p.cc), el('td', '', n));
+    const src = el('td');
+    const pill = learned[p.id] && have === n ? el('span', 'pill good', 'Read from your unit')
+      : have ? el('span', 'pill part', have + ' of ' + n + ' known') : el('span', 'pill', 'Even spread');
+    src.append(pill);
+    const act = el('td');
+    const b = el('button', 'btn', 'Learn'); b.type = 'button';
+    b.addEventListener('click', () => startLearn(p));
+    act.append(b);
+    if (learned[p.id]) {
+      const r = el('button', 'btn', 'Reset'); r.type = 'button'; r.style.marginLeft = '4px';
+      r.addEventListener('click', () => {
+        delete learned[p.id];
+        if (p.id === 'tWave') valueMap.tWave = { ...KNOWN_WAVES }; else delete valueMap[p.id];
+        saveMap(); renderMap(); refreshAll();
+      });
+      act.append(r);
+    }
+    tr.append(src, act);
+    return tr;
+  });
+  $('mapBody').replaceChildren(...rows);
+}
+
+/* ---------- Wiring ---------- */
+function mutate(c) {
+  pushUndo();
+  const ch = kit.ch[c];
+  for (const p of CH_PARAMS) {
+    if (['level', 'pan', 'tWave', 'nType', 'cType', 'distType', 'nLvl', 'tLvl', 'cLevel'].includes(p.id)) continue;
+    const n = p.labels.length, spread = n * .12;
+    ch.v[p.id] = clamp(Math.round(ch.v[p.id] + (Math.random() - .5) * 2 * spread), 0, n - 1);
+  }
+  sendChannel(c, 2); renderPads(); refreshAll();
+}
+function exportJson(name, obj) { download(name, JSON.stringify(obj, null, 1), 'application/json'); }
+const safeName = s => s.replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'kit';
+function pickFile(input, fn, mode) {
+  input.addEventListener('change', async () => {
+    const f = input.files[0]; input.value = '';
+    if (!f) return;
+    try { fn(mode === 'buf' ? await f.arrayBuffer() : JSON.parse(await f.text())); }
+    catch { toast('Couldn\'t read that file.'); }
+  });
+}
+function wire() {
+  $('connect').addEventListener('click', connect);
+  $('outSel').addEventListener('change', bindPorts);
+  $('inSel').addEventListener('change', bindPorts);
+  $('globalCh').addEventListener('change', e => { globalCh = clamp(+e.target.value || 10, 1, 16) - 1; e.target.value = globalCh + 1; store.set('globalCh', globalCh); });
+  $('routing').addEventListener('change', e => { routing = e.target.value; unitFocus = -1; store.set('routing', routing); });
+
+  $('copy').addEventListener('click', () => { clip = { from: focus, data: clone(kit.ch[focus]) }; toast('Copied channel ' + (focus + 1) + '.'); });
+  $('paste').addEventListener('click', () => { if (!clip) return toast('Copy a channel first.'); replaceChannel(focus, clone(clip.data), 'Pasted to channel ' + (focus + 1) + '.'); });
+  $('swap').addEventListener('click', () => {
+    if (!clip || clip.from === focus) return toast('Copy one channel, select another, then press Swap.');
+    pushUndo();
+    const a = clip.from, b = focus, t = kit.ch[a];
+    kit.ch[a] = kit.ch[b]; kit.ch[b] = t;
+    sendChannel(a, 2); sendChannel(b, 2); renderPads(); refreshAll();
+    toast('Swapped channels ' + (a + 1) + ' and ' + (b + 1) + '.');
+  });
+  $('init').addEventListener('click', () => replaceChannel(focus, blankChannel('Init'), 'Channel ' + (focus + 1) + ' reset.'));
+  $('mutate').addEventListener('click', () => mutate(focus));
+  const undo = () => {
+    if (!undoStack.length) return toast('Nothing to undo.');
+    kit = JSON.parse(undoStack.pop()); afterKitLoad();
+    for (let c = 0; c < 6; c++) sendChannel(c, 2);
+    for (const p of KIT_PARAMS) sendParam(p, 0, kit.kit[p.id], 2);
+  };
+  $('undo').addEventListener('click', undo);
+  $('editAll').addEventListener('click', e => { editAll = !editAll; e.currentTarget.classList.toggle('on', editAll); e.currentTarget.setAttribute('aria-pressed', editAll); });
+  $('audition').addEventListener('click', e => { audition = !audition; e.currentTarget.classList.toggle('on', audition); e.currentTarget.setAttribute('aria-pressed', audition); });
+  $('panic').addEventListener('click', () => { raw([0xB0 | globalCh, 120, 0]); raw([0xB0 | globalCh, 123, 0]); toast('Sent All Sound Off.'); });
+
+  $('starter').append(...STARTERS.map(s => new Option(s.name)));
+  $('loadStarter').addEventListener('click', () => { const n = $('starter').value; replaceChannel(focus, starter(n), 'Loaded ' + n + ' on channel ' + (focus + 1) + '.'); });
+  $('tune').addEventListener('click', () => {
+    pushUndo();
+    const steps = $('scale').value.split(',').map(Number), root = kit.ch[0].v.tPitch;
+    kit.ch.forEach((c, i) => {
+      c.v.tPitch = clamp(root + steps[i] * 2, 0, 255);
+      sendParam(BY_ID.tPitch, i, c.v.tPitch, 2);
+    });
+    renderPads(); refreshAll();
+    toast('Pads tuned up from ' + noteName(root / 2) + '.');
+  });
+
+  $('sendKit').addEventListener('click', sendKit);
+  $('kitName').addEventListener('input', e => { kit.name = e.target.value || 'Untitled kit'; });
+  $('recall').addEventListener('click', () => {
+    const lsb = $('bank').selectedIndex, n = clamp(+$('prog').value || 1, 1, 50);
+    $('prog').value = n;
+    ccMsg(globalCh, CC.bankMsb, 0, 3); ccMsg(globalCh, CC.bankLsb, lsb, 3); raw([0xC0 | globalCh, n - 1], 3);
+    unitFocus = -1;
+    toast('Recalled ' + 'ABCD'[lsb] + n + ' on the unit. The knobs here still show your editor kit.');
+  });
+  $('saveKit').addEventListener('click', () => { library = library.filter(k => k.name !== kit.name); library.unshift(clone(kit)); store.set('library', library); renderLibrary(); toast('Saved "' + kit.name + '" in this browser.'); });
+  $('exportKit').addEventListener('click', () => exportJson(safeName(kit.name) + '.nd3kit', { format: 'nd3p-editor-kit', version: 1, ...kit }));
+  $('importKit').addEventListener('click', () => $('kitFile').click());
+  pickFile($('kitFile'), d => { if (d.format !== 'nd3p-editor-kit') return toast('That isn\'t a kit from this editor.'); pushUndo(); kit = normaliseKit(d); afterKitLoad(); toast('Imported "' + kit.name + '". Send kit to hear it.'); });
+
+  $('learnStop').addEventListener('click', stopLearn);
+  $('learnBack').addEventListener('click', () => {
+    const l = learning; if (!l || !l.idx) return;
+    l.idx--; delete l.table[l.idx]; l.last = null; learnPrompt();
+  });
+  $('exportCal').addEventListener('click', () => exportJson('nd3p-value-map.json', { format: 'nd3p-value-map', valueMap, learned }));
+  $('importCal').addEventListener('click', () => $('calFile').click());
+  pickFile($('calFile'), d => { if (!loadMap(d)) return toast('That isn\'t a value map.'); saveMap(); renderMap(); refreshAll(); toast('Value map imported.'); });
+
+  $('syxSave').addEventListener('click', () => download(safeName(kit.name) + '.syx', sysexBytes(), 'application/octet-stream'));
+  $('syxLoad').addEventListener('click', () => $('syxFile').click());
+  pickFile($('syxFile'), loadSyx, 'buf');
+  $('syxClear').addEventListener('click', () => { sysex = []; updateSysex(); });
+  $('syxSend').addEventListener('click', () => {
+    if (!access || !access.sysexEnabled) return toast('Sys Ex needs MIDI permission. Press Connect MIDI and allow it.');
+    if (!out) return toast('Choose a MIDI out first.');
+    sysex.forEach(m => raw(m, 30));
+    toast('Dump sent. Use Store Kit on the unit to keep it.');
+  });
+
+  document.querySelectorAll('[role=tab]').forEach(t => t.addEventListener('click', () => {
+    document.querySelectorAll('[role=tab]').forEach(o => {
+      o.setAttribute('aria-selected', o === t);
+      $(o.getAttribute('aria-controls')).hidden = o !== t;
+    });
+  }));
+
+  const box = $('indCh');
+  indCh.forEach((c, i) => {
+    const l = el('label', 'field'), input = el('input');
+    l.append(el('span', '', 'Ch ' + (i + 1)), input);
+    input.type = 'number'; input.min = 1; input.max = 16; input.value = c + 1; input.id = 'ind' + i;
+    input.addEventListener('change', () => { indCh[i] = clamp(+input.value || i + 1, 1, 16) - 1; input.value = indCh[i] + 1; store.set('indCh', indCh); });
+    box.append(l);
+  });
+
+  addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); return; }
+    if (e.target.matches('input, select, textarea')) return;
+    if (e.key >= '1' && e.key <= '6') selectChannel(+e.key - 1);
+  });
+  setInterval(() => {
+    if (!logDirty) return;
+    logDirty = false;
+    const l = $('log'), pinned = l.scrollTop + l.clientHeight >= l.scrollHeight - 6;
+    l.textContent = logLines.join('\n');
+    if (pinned) l.scrollTop = l.scrollHeight;
+  }, 150);
+}
+
+function boot() {
+  const g = store.get('globalCh'); if (Number.isInteger(g)) { globalCh = clamp(g, 0, 15); $('globalCh').value = globalCh + 1; }
+  const r = store.get('routing'); if (r === 'individual') { routing = r; $('routing').value = r; }
+  const ic = store.get('indCh'); if (Array.isArray(ic) && ic.length === 6) indCh = ic.map(x => clamp(x | 0, 0, 15));
+  loadMap(store.get('map'));
+  buildSeg(); showSeg('nd3P');
+  buildPads();
+  PARAMS.forEach(p => {
+    if (p.box) makeKnob(p);
+    if (p.chips) makeChips(p, $(p.chips), p.labels);
+  });
+  WAVE_FAMILIES.forEach(f => {
+    const d = el('div'); d.append(el('span', '', f.name));
+    const c = el('div', 'chips'); d.append(c);
+    makeChips(BY_ID.tWave, c, f.ids);
+    $('waves').append(d);
+  });
+  wire();
+  afterKitLoad();
+  renderLibrary(); renderMap(); updateSysex();
+  if (!navigator.requestMIDIAccess) setMidiStatus('No Web MIDI here. Use Chrome or Edge.');
+  $('preview').hidden = window.top === window;
+}
+boot();
+window.__nd3p = { toCC, fromCC, selectToCh, BY_ID, PARAMS, getKit: () => kit };
+</script>
+</body>
+</html>

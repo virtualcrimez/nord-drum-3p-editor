@@ -1,0 +1,7 @@
+desktop/node_modules/
+desktop/app/
+desktop/dist/
+desktop/package-lock.json
+plugin/web/
+plugin/build/
+plugin/test-result.txt
