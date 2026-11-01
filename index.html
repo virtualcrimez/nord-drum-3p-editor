@@ -307,7 +307,7 @@ td { padding: 4px 8px; border-top: 1px solid var(--line); white-space: nowrap; f
     </div>
 
     <div id="pane-map" role="tabpanel">
-      <p class="hint">Nord publishes the CC numbers but not how panel values map to 0–127. Everything starts as an even spread, which is wrong for Tone Wave. Learn reads the real values from your unit. To use it, set the unit one step above the lowest value, press Learn, turn down one click, then turn up one click at a time to the end.</p>
+      <p class="hint">Nord publishes the CC numbers but not how panel values map to 0–127. Tone Wave comes with values read from an owner's unit, which should suit most people, and everything else starts as an even spread. If a wave lands in the wrong place, Learn reads the real values from your unit. To use it, set the unit one step above the lowest value, press Learn, turn down one click, then turn up one click at a time to the end.</p>
       <div id="learnBox" hidden>
         <p>Learning <span id="learnName"></span>. Now set the unit to <b id="learnNext"></b> <span id="learnPos"></span></p>
         <div class="row top8"><button class="btn" id="learnBack" type="button">Back one step</button><button class="btn" id="learnStop" type="button">Stop and keep</button></div>
@@ -358,7 +358,7 @@ td { padding: 4px 8px; border-top: 1px solid var(--line); white-space: nowrap; f
     </div>
   </section>
 
-  <p class="foot">CC numbers come from the Nord Drum 3P User Manual, Edition C. Bank Select, Tone Pitch steps, Channel Select ranges and the first five Wave values come from owner reports. Starter sounds are simple recipes for this editor, not factory patches.</p>
+  <p class="foot">CC numbers come from the Nord Drum 3P User Manual, Edition C. Bank Select, Tone Pitch steps, Channel Select ranges and the Wave values come from owner reports. Starter sounds are simple recipes for this editor, not factory patches.</p>
 </div>
 <div id="toast" role="status" hidden></div>
 
@@ -444,7 +444,11 @@ const SELECT_SEND = [10, 32, 53, 74, 95, 117];         // middle of each owner-r
 const SELECT_START = [22, 43, 64, 85, 107];            // manual's "channel 4 = 71" falls inside these
 
 /* ---------- Value scaling ---------- */
-const KNOWN_WAVES = { 0: 74, 1: 83, 2: 77, 3: 80, 4: 115 }; // owner report, firmware 1.04
+const KNOWN_WAVES = {                                  // read from an owner's unit
+  0: 74, 1: 83, 2: 77, 3: 80, 4: 115, 5: 118, 6: 127, 7: 112, 8: 89, 9: 93, 10: 96, 11: 105,
+  12: 0, 13: 4, 14: 7, 15: 10, 16: 13, 17: 20, 18: 23, 19: 26, 20: 29, 21: 32, 22: 39, 23: 42,
+  24: 86, 25: 48, 26: 51, 27: 54, 28: 58, 29: 67, 30: 70, 31: 108, 32: 121, 33: 124,
+};
 let valueMap = { tWave: { ...KNOWN_WAVES } };
 const learned = {};                                     // id -> true once read from this unit
 
@@ -1020,7 +1024,7 @@ function loadMap(m) {
     if (!BY_ID[id]) continue;
     const t = {};
     for (const k in m.valueMap[id]) { const v = m.valueMap[id][k]; if (Number.isInteger(v) && v >= 0 && v <= 127) t[+k] = v; }
-    valueMap[id] = t;
+    valueMap[id] = id === 'tWave' ? { ...KNOWN_WAVES, ...t } : t;   // a map saved before all the waves were built in
     if (m.learned && m.learned[id]) learned[id] = true;
   }
   return true;
@@ -1032,7 +1036,7 @@ function renderMap() {
     tr.append(el('td', '', p.part + ' ' + p.name), el('td', '', p.cc), el('td', '', n));
     const src = el('td');
     const pill = learned[p.id] && have === n ? el('span', 'pill good', 'Read from your unit')
-      : have ? el('span', 'pill part', have + ' of ' + n + ' known') : el('span', 'pill', 'Even spread');
+      : have === n ? el('span', 'pill good', 'Built in') : have ? el('span', 'pill part', have + ' of ' + n + ' known') : el('span', 'pill', 'Even spread');
     src.append(pill);
     const act = el('td');
     const b = el('button', 'btn', 'Learn'); b.type = 'button';

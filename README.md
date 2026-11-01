@@ -97,11 +97,11 @@ The plugin uses JUCE and is licensed under the GNU AGPL v3, separately from the 
 
 ## Value map
 
-Nord publishes the MIDI CC numbers, but not how panel values map to 0–127. The editor starts with an even spread for most parameters, which is wrong for Tone Wave.
+Nord publishes the MIDI CC numbers, but not how panel values map to 0–127. Tone Wave comes with all 34 values built in, read from an owner's unit, so it should work for most people without any setup. Other parameters start with an even spread.
 
 ![The Value map tab, listing each parameter with its CC number, step count and Learn button](docs/images/value-map.png)
 
-Only 5 of the 34 Tone Wave values are built in. There are two ways to teach the rest:
+If a wave lands in the wrong place on your unit, you can change the values in two ways:
 
 - **One at a time:** when the unit lands on an unknown wave, the Tone section asks you to click the matching button. Nothing is sent to the unit.
 - **All at once:** press **Learn** next to Tone Wave and step through the waves on the unit.
@@ -134,4 +134,4 @@ The MIDI monitor tab shows the messages going in and out, which helps when somet
 
 ## Credits
 
-CC numbers come from the Nord Drum 3P User Manual, Edition C. Bank Select, Tone Pitch steps, Channel Select ranges and the first five wave values come from owner reports.
+CC numbers come from the Nord Drum 3P User Manual, Edition C. Bank Select, Tone Pitch steps, Channel Select ranges and the wave values come from owner reports.
